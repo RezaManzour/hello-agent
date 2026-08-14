@@ -9,7 +9,7 @@ class LLMConfig:
     def __init__(self):
         self.model = os.getenv(
             "LLM_MODEL",
-            "openai/gpt-oss-120b:cerebras",
+            "openai/gpt-oss-120b:fireworks-ai",
         )
 
         self.temperature = float(

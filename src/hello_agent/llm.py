@@ -1,8 +1,10 @@
 import os
+from typing import TypeVar
 
 from dotenv import load_dotenv
 from huggingface_hub import InferenceClient
 from huggingface_hub.errors import HfHubHTTPError
+from pydantic import BaseModel
 
 from hello_agent.config import LLMConfig
 from hello_agent.exceptions import (
@@ -11,6 +13,9 @@ from hello_agent.exceptions import (
     LLMRateLimitError,
 )
 from hello_agent.types import LLMResponse, Message
+
+
+T = TypeVar("T", bound=BaseModel)
 
 load_dotenv()
 
@@ -31,7 +36,11 @@ class LLMClient:
         self.temperature = config.temperature
         self.max_tokens = config.max_tokens
 
-    def chat(self, messages: list[Message]) -> LLMResponse:
+    def chat(
+        self,
+        messages: list[Message],
+        response_model: type[T] | None = None,
+    ) -> LLMResponse | T:
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
@@ -44,6 +53,19 @@ class LLMClient:
                 ],
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
+                **(
+                    {
+                        "response_format": {
+                            "type": "json_schema",
+                            "json_schema": {
+                                "name": response_model.__name__,
+                                "schema": response_model.model_json_schema(),
+                            },
+                        }
+                    }
+                    if response_model is not None
+                    else {}
+                ),
             )
 
         except HfHubHTTPError as exc:
@@ -65,6 +87,16 @@ class LLMClient:
 
         choice = response.choices[0]
         usage = response.usage
+
+        if response_model is not None:
+            try:
+                return response_model.model_validate_json(
+                    choice.message.content
+                )
+            except Exception as exc:
+                raise LLMProviderError(
+                    "Failed to parse structured LLM response."
+                ) from exc
 
         return LLMResponse(
             content=choice.message.content,

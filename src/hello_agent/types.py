@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from pydantic import BaseModel
+
 
 @dataclass
 class Message:
@@ -15,3 +17,8 @@ class LLMResponse:
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
+
+
+class AgentDefinition(BaseModel):
+    definition: str
+    confidence: float

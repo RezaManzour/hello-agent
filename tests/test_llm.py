@@ -12,7 +12,7 @@ from hello_agent.exceptions import (
     LLMRateLimitError,
 )
 from hello_agent.llm import LLMClient
-from hello_agent.types import Message
+from hello_agent.types import AgentDefinition, Message
 
 
 def make_hf_error(status_code: int) -> HfHubHTTPError:
@@ -197,3 +197,132 @@ def test_llm_client_passes_generation_parameters():
 
     assert call_kwargs["temperature"] == 0.7
     assert call_kwargs["max_tokens"] == 512
+
+
+def test_llm_client_returns_structured_output():
+    fake_response = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    content='{"definition": "An AI agent acts toward a goal.", "confidence": 0.95}'
+                ),
+                finish_reason="stop",
+            )
+        ],
+        model="test-model",
+        usage=SimpleNamespace(
+            prompt_tokens=10,
+            completion_tokens=20,
+            total_tokens=30,
+        ),
+    )
+
+    fake_client = Mock()
+    fake_client.chat.completions.create.return_value = fake_response
+
+    with patch(
+        "hello_agent.llm.InferenceClient",
+        return_value=fake_client,
+    ):
+        client = LLMClient(LLMConfig())
+
+        result = client.chat(
+            [
+                Message(
+                    role="user",
+                    content="Explain what an AI agent is.",
+                )
+            ],
+            response_model=AgentDefinition,
+        )
+
+    assert isinstance(result, AgentDefinition)
+    assert result.definition == "An AI agent acts toward a goal."
+    assert result.confidence == 0.95
+
+
+def test_llm_client_sends_structured_output_schema():
+    fake_response = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    content='{"definition": "An AI agent acts toward a goal.", "confidence": 0.95}'
+                ),
+                finish_reason="stop",
+            )
+        ],
+        model="test-model",
+        usage=SimpleNamespace(
+            prompt_tokens=10,
+            completion_tokens=20,
+            total_tokens=30,
+        ),
+    )
+
+    fake_client = Mock()
+    fake_client.chat.completions.create.return_value = fake_response
+
+    with patch(
+        "hello_agent.llm.InferenceClient",
+        return_value=fake_client,
+    ):
+        client = LLMClient(LLMConfig())
+
+        client.chat(
+            [
+                Message(
+                    role="user",
+                    content="Explain what an AI agent is.",
+                )
+            ],
+            response_model=AgentDefinition,
+        )
+
+    call_kwargs = fake_client.chat.completions.create.call_args.kwargs
+    response_format = call_kwargs["response_format"]
+
+    assert response_format["type"] == "json_schema"
+    assert response_format["json_schema"]["name"] == "AgentDefinition"
+    assert response_format["json_schema"]["schema"] == AgentDefinition.model_json_schema()
+
+
+def test_llm_client_handles_invalid_structured_output():
+    fake_response = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    content='{"definition": "Missing confidence"}'
+                ),
+                finish_reason="stop",
+            )
+        ],
+        model="test-model",
+        usage=SimpleNamespace(
+            prompt_tokens=10,
+            completion_tokens=20,
+            total_tokens=30,
+        ),
+    )
+
+    fake_client = Mock()
+    fake_client.chat.completions.create.return_value = fake_response
+
+    with patch(
+        "hello_agent.llm.InferenceClient",
+        return_value=fake_client,
+    ):
+        client = LLMClient(LLMConfig())
+
+        try:
+            client.chat(
+                [
+                    Message(
+                        role="user",
+                        content="Explain what an AI agent is.",
+                    )
+                ],
+                response_model=AgentDefinition,
+            )
+            raise AssertionError("Expected LLMProviderError")
+        except Exception as exc:
+            assert "structured" in str(exc).lower()
