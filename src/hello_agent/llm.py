@@ -106,3 +106,45 @@ class LLMClient:
             completion_tokens=usage.completion_tokens,
             total_tokens=usage.total_tokens,
         )
+
+    def chat_stream(self, messages: list[Message]):
+        try:
+            stream = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        "role": message.role,
+                        "content": message.content,
+                    }
+                    for message in messages
+                ],
+                temperature=self.temperature,
+                max_tokens=self.max_tokens,
+                stream=True,
+            )
+
+            for chunk in stream:
+                if not chunk.choices:
+                    continue
+
+                content = chunk.choices[0].delta.content
+
+                if content:
+                    yield content
+
+        except HfHubHTTPError as exc:
+            status_code = exc.response.status_code
+
+            if status_code == 401:
+                raise LLMAuthenticationError(
+                    "Hugging Face authentication failed."
+                ) from exc
+
+            if status_code == 429:
+                raise LLMRateLimitError(
+                    "Hugging Face rate limit exceeded."
+                ) from exc
+
+            raise LLMProviderError(
+                f"Hugging Face provider error: HTTP {status_code}"
+            ) from exc

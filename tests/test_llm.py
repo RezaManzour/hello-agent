@@ -326,3 +326,126 @@ def test_llm_client_handles_invalid_structured_output():
             raise AssertionError("Expected LLMProviderError")
         except Exception as exc:
             assert "structured" in str(exc).lower()
+
+
+def test_llm_client_streams_text():
+    fake_chunks = [
+        SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    delta=SimpleNamespace(content="Hello ")
+                )
+            ]
+        ),
+        SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    delta=SimpleNamespace(content="world!")
+                )
+            ]
+        ),
+    ]
+
+    fake_client = Mock()
+    fake_client.chat.completions.create.return_value = iter(fake_chunks)
+
+    with patch(
+        "hello_agent.llm.InferenceClient",
+        return_value=fake_client,
+    ):
+        client = LLMClient(LLMConfig())
+
+        result = list(
+            client.chat_stream(
+                [
+                    Message(
+                        role="user",
+                        content="Say hello.",
+                    )
+                ]
+            )
+        )
+
+    assert result == ["Hello ", "world!"]
+
+
+def test_llm_client_stream_ignores_empty_chunks():
+    fake_chunks = [
+        SimpleNamespace(choices=[]),
+        SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    delta=SimpleNamespace(content="Hello")
+                )
+            ]
+        ),
+        SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    delta=SimpleNamespace(content=None)
+                )
+            ]
+        ),
+    ]
+
+    fake_client = Mock()
+    fake_client.chat.completions.create.return_value = iter(fake_chunks)
+
+    with patch(
+        "hello_agent.llm.InferenceClient",
+        return_value=fake_client,
+    ):
+        client = LLMClient(LLMConfig())
+
+        result = list(
+            client.chat_stream(
+                [
+                    Message(
+                        role="user",
+                        content="Say hello.",
+                    )
+                ]
+            )
+        )
+
+    assert result == ["Hello"]
+
+
+def test_llm_client_stream_passes_parameters():
+    fake_chunks = [
+        SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    delta=SimpleNamespace(content="Test")
+                )
+            ]
+        )
+    ]
+
+    fake_client = Mock()
+    fake_client.chat.completions.create.return_value = iter(fake_chunks)
+
+    with patch(
+        "hello_agent.llm.InferenceClient",
+        return_value=fake_client,
+    ):
+        client = LLMClient(LLMConfig())
+
+        list(
+            client.chat_stream(
+                [
+                    Message(
+                        role="user",
+                        content="Test parameters.",
+                    )
+                ]
+            )
+        )
+
+    fake_client.chat.completions.create.assert_called_once()
+
+    call_kwargs = fake_client.chat.completions.create.call_args.kwargs
+
+    assert call_kwargs["temperature"] == 0.7
+    assert call_kwargs["max_tokens"] == 512
+    assert call_kwargs["stream"] is True
