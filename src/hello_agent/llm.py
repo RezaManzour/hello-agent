@@ -1,4 +1,5 @@
 import os
+import time
 from typing import TypeVar
 
 from dotenv import load_dotenv
@@ -22,16 +23,10 @@ load_dotenv()
 
 class LLMClient:
     def __init__(self, config: LLMConfig):
-        token = os.getenv("HF_TOKEN")
-
-        if not token:
-            raise LLMAuthenticationError("HF_TOKEN is not set")
-
         self.client = InferenceClient(
-            token=token,
+            token=os.environ["HF_TOKEN"],
             timeout=config.timeout,
         )
-
         self.model = config.model
         self.temperature = config.temperature
         self.max_tokens = config.max_tokens
@@ -41,49 +36,59 @@ class LLMClient:
         messages: list[Message],
         response_model: type[T] | None = None,
     ) -> LLMResponse | T:
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {
-                        "role": message.role,
-                        "content": message.content,
-                    }
-                    for message in messages
-                ],
-                temperature=self.temperature,
-                max_tokens=self.max_tokens,
-                **(
-                    {
-                        "response_format": {
-                            "type": "json_schema",
-                            "json_schema": {
-                                "name": response_model.__name__,
-                                "schema": response_model.model_json_schema(),
-                            },
+
+        max_retries = 2
+
+        for attempt in range(max_retries + 1):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {
+                            "role": message.role,
+                            "content": message.content,
                         }
-                    }
-                    if response_model is not None
-                    else {}
-                ),
-            )
+                        for message in messages
+                    ],
+                    temperature=self.temperature,
+                    max_tokens=self.max_tokens,
+                    **(
+                        {
+                            "response_format": {
+                                "type": "json_schema",
+                                "json_schema": {
+                                    "name": response_model.__name__,
+                                    "schema": response_model.model_json_schema(),
+                                },
+                            }
+                        }
+                        if response_model is not None
+                        else {}
+                    ),
+                )
 
-        except HfHubHTTPError as exc:
-            status_code = exc.response.status_code
+                break
 
-            if status_code == 401:
-                raise LLMAuthenticationError(
-                    "Hugging Face authentication failed."
+            except HfHubHTTPError as exc:
+                status_code = exc.response.status_code
+
+                if status_code == 401:
+                    raise LLMAuthenticationError(
+                        "Hugging Face authentication failed."
+                    ) from exc
+
+                if status_code == 429:
+                    if attempt < max_retries:
+                        time.sleep(0.1 * (2**attempt))
+                        continue
+
+                    raise LLMRateLimitError(
+                        "Hugging Face rate limit exceeded."
+                    ) from exc
+
+                raise LLMProviderError(
+                    f"Hugging Face provider error: HTTP {status_code}"
                 ) from exc
-
-            if status_code == 429:
-                raise LLMRateLimitError(
-                    "Hugging Face rate limit exceeded."
-                ) from exc
-
-            raise LLMProviderError(
-                f"Hugging Face provider error: HTTP {status_code}"
-            ) from exc
 
         choice = response.choices[0]
         usage = response.usage

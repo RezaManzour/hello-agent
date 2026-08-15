@@ -449,3 +449,77 @@ def test_llm_client_stream_passes_parameters():
     assert call_kwargs["temperature"] == 0.7
     assert call_kwargs["max_tokens"] == 512
     assert call_kwargs["stream"] is True
+
+
+
+def test_llm_client_retries_rate_limit():
+    fake_response = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                finish_reason="stop",
+                message=SimpleNamespace(
+                    content="Success after retry."
+                ),
+            )
+        ],
+        model="test-model",
+        usage=SimpleNamespace(
+            prompt_tokens=5,
+            completion_tokens=3,
+            total_tokens=8,
+        ),
+    )
+
+    rate_limit_error = make_hf_error(429)
+
+    fake_client = Mock()
+    fake_client.chat.completions.create.side_effect = [
+        rate_limit_error,
+        fake_response,
+    ]
+
+    with patch(
+        "hello_agent.llm.InferenceClient",
+        return_value=fake_client,
+    ):
+        client = LLMClient(LLMConfig())
+
+        result = client.chat(
+            [
+                Message(
+                    role="user",
+                    content="Test retry.",
+                )
+            ]
+        )
+
+    assert result.content == "Success after retry."
+    assert fake_client.chat.completions.create.call_count == 2
+
+
+def test_llm_client_does_not_retry_authentication_error():
+    auth_error = make_hf_error(401)
+
+    fake_client = Mock()
+    fake_client.chat.completions.create.side_effect = auth_error
+
+    with patch(
+        "hello_agent.llm.InferenceClient",
+        return_value=fake_client,
+    ):
+        client = LLMClient(LLMConfig())
+
+        try:
+            client.chat(
+                [
+                    Message(
+                        role="user",
+                        content="Test authentication.",
+                    )
+                ]
+            )
+            raise AssertionError("Expected LLMAuthenticationError")
+        except LLMAuthenticationError:
+            pass
+
+    assert fake_client.chat.completions.create.call_count == 1

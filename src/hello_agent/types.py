@@ -22,3 +22,8 @@ class LLMResponse:
 class AgentDefinition(BaseModel):
     definition: str
     confidence: float
+
+
+class ToolCall(BaseModel):
+    tool: str
+    arguments: dict[str, object]
