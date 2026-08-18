@@ -13,7 +13,7 @@ from hello_agent.exceptions import (
     LLMProviderError,
     LLMRateLimitError,
 )
-from hello_agent.types import LLMResponse, Message
+from hello_agent.types import LLMResponse, Message, ToolCall
 
 
 T = TypeVar("T", bound=BaseModel)
@@ -35,7 +35,8 @@ class LLMClient:
         self,
         messages: list[Message],
         response_model: type[T] | None = None,
-    ) -> LLMResponse | T:
+        tools: list[dict] | None = None,
+    ) -> LLMResponse | T | ToolCall:
 
         max_retries = 2
 
@@ -65,6 +66,19 @@ class LLMClient:
                         if response_model is not None
                         else {}
                     ),
+                    **(
+                        {
+                            "tools": [
+                                {
+                                    "type": "function",
+                                    "function": tool,
+                                }
+                                for tool in tools.values()
+                            ]
+                        }
+                        if tools is not None
+                        else {}
+                    ),
                 )
 
                 break
@@ -92,6 +106,24 @@ class LLMClient:
 
         choice = response.choices[0]
         usage = response.usage
+
+        if getattr(choice.message, "tool_calls", None):
+            tool_call = choice.message.tool_calls[0]
+            function = tool_call.function
+
+            import json
+
+            try:
+                arguments = json.loads(function.arguments)
+            except json.JSONDecodeError as exc:
+                raise LLMProviderError(
+                    "Failed to parse tool call arguments."
+                ) from exc
+
+            return ToolCall(
+                tool=function.name,
+                arguments=arguments,
+            )
 
         if response_model is not None:
             try:

@@ -12,7 +12,7 @@ from hello_agent.exceptions import (
     LLMRateLimitError,
 )
 from hello_agent.llm import LLMClient
-from hello_agent.types import AgentDefinition, Message
+from hello_agent.types import AgentDefinition, Message, ToolCall
 
 
 def make_hf_error(status_code: int) -> HfHubHTTPError:
@@ -523,3 +523,78 @@ def test_llm_client_does_not_retry_authentication_error():
             pass
 
     assert fake_client.chat.completions.create.call_count == 1
+
+def test_llm_client_supports_tools():
+    fake_response = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                finish_reason="tool_calls",
+                message=SimpleNamespace(
+                    content=None,
+                    tool_calls=[
+                        SimpleNamespace(
+                            function=SimpleNamespace(
+                                name="calculator",
+                                arguments='{"a": 15, "b": 30}',
+                            )
+                        )
+                    ],
+                ),
+            )
+        ],
+        model="test-model",
+        usage=SimpleNamespace(
+            prompt_tokens=10,
+            completion_tokens=8,
+            total_tokens=18,
+        ),
+    )
+
+    fake_client = Mock()
+    fake_client.chat.completions.create.return_value = fake_response
+
+    tools = {
+        "calculator": {
+            "name": "calculator",
+            "description": "Multiply two numbers.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "a": {"type": "integer"},
+                    "b": {"type": "integer"},
+                },
+                "required": ["a", "b"],
+            },
+        }
+    }
+
+    with patch(
+        "hello_agent.llm.InferenceClient",
+        return_value=fake_client,
+    ):
+        client = LLMClient(LLMConfig())
+
+        result = client.chat(
+            [
+                Message(
+                    role="user",
+                    content="Calculate 15 times 30.",
+                )
+            ],
+            tools=tools,
+        )
+
+    assert isinstance(result, ToolCall)
+    assert result.tool == "calculator"
+    assert result.arguments == {"a": 15, "b": 30}
+
+    fake_client.chat.completions.create.assert_called_once()
+
+    call_kwargs = fake_client.chat.completions.create.call_args.kwargs
+
+    assert call_kwargs["tools"] == [
+        {
+            "type": "function",
+            "function": tools["calculator"],
+        }
+    ]
