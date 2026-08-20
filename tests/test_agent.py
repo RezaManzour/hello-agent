@@ -1127,3 +1127,69 @@ def test_agent_supports_dict_tool_arguments():
 
     assert tool_message.role == "tool"
     assert tool_message.content == "python:agents"
+
+
+def test_tool_result_model():
+    from hello_agent.types import ToolResult
+
+    result = ToolResult(
+        tool="calculator",
+        content="450",
+    )
+
+    assert result.tool == "calculator"
+    assert result.content == "450"
+    assert result.is_error is False
+
+
+def test_agent_run_tool_returns_success_tool_result():
+    fake_llm = Mock()
+
+    def calculator(a: int, b: int) -> int:
+        return a * b
+
+    agent = Agent(
+        llm=fake_llm,
+        tools={"calculator": calculator},
+    )
+
+    tool_call = ToolCall(
+        tool="calculator",
+        arguments={"a": 25, "b": 18},
+    )
+
+    from hello_agent.types import ToolResult
+
+    result = agent._run_tool(tool_call)
+
+    assert isinstance(result, ToolResult)
+    assert result.tool == "calculator"
+    assert result.content == "450"
+    assert result.is_error is False
+
+
+def test_agent_run_tool_returns_error_tool_result():
+    fake_llm = Mock()
+
+    def calculator(a: int, b: int) -> int:
+        return a // b
+
+    agent = Agent(
+        llm=fake_llm,
+        tools={"calculator": calculator},
+    )
+
+    tool_call = ToolCall(
+        tool="calculator",
+        arguments={"a": 15, "b": 0},
+    )
+
+    from hello_agent.types import ToolResult
+
+    result = agent._run_tool(tool_call)
+
+    assert isinstance(result, ToolResult)
+    assert result.tool == "calculator"
+    assert result.content == "Tool error: integer division or modulo by zero"
+    assert result.is_error is True
+

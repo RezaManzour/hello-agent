@@ -27,3 +27,11 @@ class AgentDefinition(BaseModel):
 class ToolCall(BaseModel):
     tool: str
     arguments: dict[str, object]
+
+
+@dataclass
+class ToolResult:
+    tool: str
+    content: str
+    is_error: bool = False
+    error: Exception | None = None

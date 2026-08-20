@@ -5,7 +5,7 @@ from typing import Callable, TypeVar, get_args, get_origin, get_type_hints
 from pydantic import BaseModel
 
 from hello_agent.llm import LLMClient
-from hello_agent.types import LLMResponse, Message, ToolCall
+from hello_agent.types import LLMResponse, Message, ToolCall, ToolResult
 
 
 T = TypeVar("T", bound=BaseModel)
@@ -288,6 +288,22 @@ class Agent:
 
         return tool(**tool_call.arguments)
 
+    def _run_tool(self, tool_call: ToolCall) -> ToolResult:
+        try:
+            tool_result = self._execute_tool(tool_call)
+            return ToolResult(
+                tool=tool_call.tool,
+                content=str(tool_result),
+                is_error=False,
+            )
+        except Exception as exc:
+            return ToolResult(
+                tool=tool_call.tool,
+                content=f"Tool error: {exc}",
+                is_error=True,
+                error=exc,
+            )
+
     def run(
         self,
         prompt: str,
@@ -358,21 +374,18 @@ class Agent:
             if response.tool not in self.tools:
                 raise ValueError(f"Unknown tool: {response.tool}")
 
-            try:
-                tool_result = self._execute_tool(response)
-                tool_content = str(tool_result)
-            except Exception as exc:
-                tool_content = f"Tool error: {exc}"
+            tool_result = self._run_tool(response)
 
+            if tool_result.is_error:
                 self.messages.append(
                     Message(
                         role="tool",
-                        content=tool_content,
+                        content=tool_result.content,
                     )
                 )
 
                 if self.max_iterations == 1:
-                    raise
+                    raise tool_result.error
 
                 next_response = self.llm.chat(self.messages.copy())
 
@@ -381,7 +394,7 @@ class Agent:
                         next_response.tool == response.tool
                         and next_response.arguments == response.arguments
                     ):
-                        raise
+                        raise tool_result.error
 
                     response = next_response
                     continue
@@ -398,7 +411,7 @@ class Agent:
             self.messages.append(
                 Message(
                     role="tool",
-                    content=tool_content,
+                    content=tool_result.content,
                 )
             )
 
