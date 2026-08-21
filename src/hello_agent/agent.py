@@ -377,12 +377,7 @@ class Agent:
             tool_result = self._run_tool(response)
 
             if tool_result.is_error:
-                self.messages.append(
-                    Message(
-                        role="tool",
-                        content=tool_result.content,
-                    )
-                )
+                self.messages.append(tool_result.to_message())
 
                 if self.max_iterations == 1:
                     raise tool_result.error
@@ -408,12 +403,7 @@ class Agent:
 
                 return next_response
 
-            self.messages.append(
-                Message(
-                    role="tool",
-                    content=tool_result.content,
-                )
-            )
+            self.messages.append(tool_result.to_message())
 
         raise RuntimeError(
             "Agent reached the maximum number of iterations."

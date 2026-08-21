@@ -35,3 +35,9 @@ class ToolResult:
     content: str
     is_error: bool = False
     error: Exception | None = None
+
+    def to_message(self) -> "Message":
+        return Message(
+            role="tool",
+            content=self.content,
+        )

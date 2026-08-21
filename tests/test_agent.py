@@ -1193,3 +1193,36 @@ def test_agent_run_tool_returns_error_tool_result():
     assert result.content == "Tool error: integer division or modulo by zero"
     assert result.is_error is True
 
+
+
+def test_tool_result_to_message():
+    from hello_agent.types import ToolResult, Message
+
+    result = ToolResult(
+        tool="calculator",
+        content="450",
+        is_error=False,
+    )
+
+    message = result.to_message()
+
+    assert isinstance(message, Message)
+    assert message.role == "tool"
+    assert message.content == "450"
+
+
+def test_tool_result_to_message_preserves_error_content():
+    from hello_agent.types import ToolResult, Message
+
+    result = ToolResult(
+        tool="calculator",
+        content="Tool error: integer division or modulo by zero",
+        is_error=True,
+        error=ZeroDivisionError("integer division or modulo by zero"),
+    )
+
+    message = result.to_message()
+
+    assert isinstance(message, Message)
+    assert message.role == "tool"
+    assert message.content == "Tool error: integer division or modulo by zero"
