@@ -1,12 +1,14 @@
 import inspect
+import json
 import types
-from typing import Callable, TypeVar, get_args, get_origin, get_type_hints
+from collections.abc import Callable
+from pathlib import Path
+from typing import TypeVar, get_args, get_origin, get_type_hints
 
 from pydantic import BaseModel
 
 from hello_agent.llm import LLMClient
 from hello_agent.types import LLMResponse, Message, ToolCall, ToolResult
-
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -58,9 +60,7 @@ class Agent:
             item_types = get_args(annotation)
 
             if len(item_types) != 1:
-                raise TypeError(
-                    f"Unsupported tool parameter type: {annotation}"
-                )
+                raise TypeError(f"Unsupported tool parameter type: {annotation}")
 
             return "array"
 
@@ -68,16 +68,12 @@ class Agent:
             dict_types = get_args(annotation)
 
             if len(dict_types) != 2:
-                raise TypeError(
-                    f"Unsupported tool parameter type: {annotation}"
-                )
+                raise TypeError(f"Unsupported tool parameter type: {annotation}")
 
             key_type, value_type = dict_types
 
             if key_type is not str:
-                raise TypeError(
-                    f"Unsupported tool parameter type: {annotation}"
-                )
+                raise TypeError(f"Unsupported tool parameter type: {annotation}")
 
             Agent._json_type_for_annotation(value_type)
 
@@ -87,18 +83,13 @@ class Agent:
             union_types = get_args(annotation)
 
             non_none_types = tuple(
-                item for item in union_types
-                if item is not type(None)
+                item for item in union_types if item is not type(None)
             )
 
             if len(non_none_types) == 1:
-                return Agent._json_type_for_annotation(
-                    non_none_types[0]
-                )
+                return Agent._json_type_for_annotation(non_none_types[0])
 
-        raise TypeError(
-            f"Unsupported tool parameter type: {annotation}"
-        )
+        raise TypeError(f"Unsupported tool parameter type: {annotation}")
 
     @staticmethod
     def _validate_tool_argument_type(
@@ -141,9 +132,7 @@ class Agent:
             key_type, value_type = get_args(annotation)
 
             if key_type is not str:
-                raise TypeError(
-                    f"Unsupported tool parameter type: {annotation}"
-                )
+                raise TypeError(f"Unsupported tool parameter type: {annotation}")
 
             for key, item in value.items():
                 Agent._validate_tool_argument_type(
@@ -207,9 +196,7 @@ class Agent:
                         "must have a type annotation."
                     )
 
-                json_type = self._json_type_for_annotation(
-                    annotation
-                )
+                json_type = self._json_type_for_annotation(annotation)
 
                 origin = get_origin(annotation)
 
@@ -219,9 +206,7 @@ class Agent:
                     properties[parameter_name] = {
                         "type": json_type,
                         "items": {
-                            "type": Agent._json_type_for_annotation(
-                                item_type
-                            ),
+                            "type": Agent._json_type_for_annotation(item_type),
                         },
                     }
 
@@ -236,9 +221,7 @@ class Agent:
                     properties[parameter_name] = {
                         "type": json_type,
                         "additionalProperties": {
-                            "type": Agent._json_type_for_annotation(
-                                value_type
-                            ),
+                            "type": Agent._json_type_for_annotation(value_type),
                         },
                     }
 
@@ -296,13 +279,42 @@ class Agent:
                 content=str(tool_result),
                 is_error=False,
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — intentional: must catch any tool failure
             return ToolResult(
                 tool=tool_call.tool,
                 content=f"Tool error: {exc}",
                 is_error=True,
                 error=exc,
             )
+
+    def save_session(self, path: str | Path) -> None:
+        data = [
+            {"role": message.role, "content": message.content}
+            for message in self.messages
+        ]
+
+        Path(path).write_text(json.dumps(data, indent=2))
+
+    @classmethod
+    def load_session(
+        cls,
+        path: str | Path,
+        llm: LLMClient,
+        tools: dict[str, Tool] | None = None,
+        max_iterations: int = 10,
+    ) -> "Agent":
+        data = json.loads(Path(path).read_text())
+
+        agent = cls(
+            llm=llm,
+            tools=tools,
+            max_iterations=max_iterations,
+        )
+        agent.messages = [
+            Message(role=item["role"], content=item["content"]) for item in data
+        ]
+
+        return agent
 
     def run(
         self,
@@ -405,6 +417,4 @@ class Agent:
 
             self.messages.append(tool_result.to_message())
 
-        raise RuntimeError(
-            "Agent reached the maximum number of iterations."
-        )
+        raise RuntimeError("Agent reached the maximum number of iterations.")

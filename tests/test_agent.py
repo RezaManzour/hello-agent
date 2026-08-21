@@ -1,5 +1,7 @@
-import pytest
+import json
 from unittest.mock import Mock
+
+import pytest
 
 from hello_agent.agent import Agent
 from hello_agent.types import AgentDefinition, LLMResponse, Message, ToolCall
@@ -219,6 +221,7 @@ def test_agent_executes_tool_call():
 
     assert result == 450
 
+
 def test_agent_executes_tool_call_and_returns_final_response():
     fake_llm = Mock()
 
@@ -274,6 +277,7 @@ def test_agent_executes_tool_call_and_returns_final_response():
         content="450",
     )
 
+
 def test_agent_executes_multiple_tool_calls():
     fake_llm = Mock()
 
@@ -310,9 +314,7 @@ def test_agent_executes_multiple_tool_calls():
         tools={"calculator": calculator},
     )
 
-    result = agent.run(
-        "Calculate 15 multiplied by 30, then multiply the result by 2."
-    )
+    result = agent.run("Calculate 15 multiplied by 30, then multiply the result by 2.")
 
     assert isinstance(result, LLMResponse)
     assert result.content == "The final result is 900."
@@ -330,6 +332,7 @@ def test_agent_executes_multiple_tool_calls():
         role="tool",
         content="900",
     )
+
 
 def test_agent_stops_after_max_iterations():
     fake_llm = Mock()
@@ -358,6 +361,7 @@ def test_agent_stops_after_max_iterations():
         assert "maximum" in str(exc).lower()
 
     assert fake_llm.chat.call_count == 3
+
 
 def test_agent_builds_tool_schemas():
     fake_llm = Mock()
@@ -694,8 +698,6 @@ def test_agent_supports_multiple_tools():
         assert tools[1]["function"]["name"] == "multiply"
 
 
-
-
 def test_agent_rejects_missing_tool_argument():
     fake_llm = Mock()
 
@@ -774,86 +776,6 @@ def test_agent_rejects_extra_tool_argument():
 
     assert tool_message.role == "tool"
     assert "unexpected" in tool_message.content.lower()
-
-
-def test_agent_rejects_invalid_tool_argument_type():
-    fake_llm = Mock()
-
-    fake_llm.chat.side_effect = [
-        ToolCall(
-            tool="calculator",
-            arguments={"a": "fifteen", "b": 30},
-        ),
-        LLMResponse(
-            content="I could not calculate the result.",
-            model="test-model",
-            finish_reason="stop",
-            prompt_tokens=20,
-            completion_tokens=8,
-            total_tokens=28,
-        ),
-    ]
-
-    def calculator(a: int, b: int) -> int:
-        """Multiply two numbers."""
-        return a * b
-
-    agent = Agent(
-        llm=fake_llm,
-        tools={"calculator": calculator},
-    )
-
-    result = agent.run("Calculate 15 times 30.")
-
-    assert isinstance(result, LLMResponse)
-    assert result.content == "I could not calculate the result."
-
-    assert fake_llm.chat.call_count == 2
-
-    tool_message = agent.messages[-2]
-
-    assert tool_message.role == "tool"
-    assert "type" in tool_message.content.lower()
-
-
-def test_agent_rejects_invalid_tool_argument_type():
-    fake_llm = Mock()
-
-    fake_llm.chat.side_effect = [
-        ToolCall(
-            tool="calculator",
-            arguments={"a": "fifteen", "b": 30},
-        ),
-        LLMResponse(
-            content="I could not calculate the result.",
-            model="test-model",
-            finish_reason="stop",
-            prompt_tokens=20,
-            completion_tokens=8,
-            total_tokens=28,
-        ),
-    ]
-
-    def calculator(a: int, b: int) -> int:
-        """Multiply two numbers."""
-        return a * b
-
-    agent = Agent(
-        llm=fake_llm,
-        tools={"calculator": calculator},
-    )
-
-    result = agent.run("Calculate 15 times 30.")
-
-    assert isinstance(result, LLMResponse)
-    assert result.content == "I could not calculate the result."
-
-    assert fake_llm.chat.call_count == 2
-
-    tool_message = agent.messages[-2]
-
-    assert tool_message.role == "tool"
-    assert "type" in tool_message.content.lower()
 
 
 def test_agent_rejects_invalid_tool_argument_type():
@@ -1194,9 +1116,8 @@ def test_agent_run_tool_returns_error_tool_result():
     assert result.is_error is True
 
 
-
 def test_tool_result_to_message():
-    from hello_agent.types import ToolResult, Message
+    from hello_agent.types import Message, ToolResult
 
     result = ToolResult(
         tool="calculator",
@@ -1212,7 +1133,7 @@ def test_tool_result_to_message():
 
 
 def test_tool_result_to_message_preserves_error_content():
-    from hello_agent.types import ToolResult, Message
+    from hello_agent.types import Message, ToolResult
 
     result = ToolResult(
         tool="calculator",
@@ -1226,3 +1147,48 @@ def test_tool_result_to_message_preserves_error_content():
     assert isinstance(message, Message)
     assert message.role == "tool"
     assert message.content == "Tool error: integer division or modulo by zero"
+
+
+def test_agent_save_session_writes_messages_to_json(tmp_path):
+    fake_llm = Mock()
+
+    agent = Agent(
+        llm=fake_llm,
+        system_prompt="You are a helpful assistant.",
+    )
+    agent.messages.append(Message(role="user", content="Hi"))
+    agent.messages.append(Message(role="assistant", content="Hello!"))
+
+    path = tmp_path / "session.json"
+    agent.save_session(path)
+
+    assert path.exists()
+
+    data = json.loads(path.read_text())
+
+    assert data == [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "Hi"},
+        {"role": "assistant", "content": "Hello!"},
+    ]
+
+
+def test_agent_load_session_restores_messages(tmp_path):
+    fake_llm = Mock()
+
+    path = tmp_path / "session.json"
+    path.write_text(
+        json.dumps(
+            [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": "Hi"},
+            ]
+        )
+    )
+
+    agent = Agent.load_session(path, llm=fake_llm)
+
+    assert agent.messages == [
+        Message(role="system", content="You are a helpful assistant."),
+        Message(role="user", content="Hi"),
+    ]
