@@ -29,3 +29,16 @@ class VectorStore:
         ranked_indices = np.argsort(-similarities)[:top_k]
 
         return [(self._texts[i], float(similarities[i])) for i in ranked_indices]
+
+
+class Retriever:
+    def __init__(self, embedding_client, store: VectorStore, top_k: int = 3):
+        self.embedding_client = embedding_client
+        self.store = store
+        self.top_k = top_k
+
+    def __call__(self, query: str) -> str:
+        """Search the knowledge base for information relevant to the query."""
+        query_vector = self.embedding_client.embed(query)
+        results = self.store.search(query_vector=query_vector, top_k=self.top_k)
+        return "\n".join(text for text, _score in results)
