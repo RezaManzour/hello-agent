@@ -22,6 +22,7 @@ class Agent:
         system_prompt: str | None = None,
         tools: dict[str, Tool] | None = None,
         max_iterations: int = 10,
+        max_messages: int | None = None,
     ):
         if max_iterations < 1:
             raise ValueError("max_iterations must be at least 1")
@@ -30,6 +31,7 @@ class Agent:
         self.system_prompt = system_prompt
         self.tools = tools or {}
         self.max_iterations = max_iterations
+        self.max_messages = max_messages
         self.messages: list[Message] = []
 
         if self.system_prompt is not None:
@@ -316,6 +318,22 @@ class Agent:
 
         return agent
 
+    def _enforce_message_limit(self) -> None:
+        if self.max_messages is None:
+            return
+
+        if len(self.messages) <= self.max_messages:
+            return
+
+        has_system = len(self.messages) > 0 and self.messages[0].role == "system"
+
+        if has_system:
+            system_message = self.messages[0]
+            remaining_slots = self.max_messages - 1
+            self.messages = [system_message] + self.messages[-remaining_slots:]
+        else:
+            self.messages = self.messages[-self.max_messages :]
+
     def run(
         self,
         prompt: str,
@@ -327,6 +345,8 @@ class Agent:
                 content=prompt,
             )
         )
+
+        self._enforce_message_limit()
 
         for _ in range(self.max_iterations):
             tool_schemas = (
@@ -374,6 +394,8 @@ class Agent:
                     )
                 )
 
+                self._enforce_message_limit()
+
                 return response
 
             self.messages.append(
@@ -404,6 +426,9 @@ class Agent:
                         raise tool_result.error
 
                     response = next_response
+
+                    self._enforce_message_limit()
+
                     continue
 
                 self.messages.append(
@@ -413,8 +438,12 @@ class Agent:
                     )
                 )
 
+                self._enforce_message_limit()
+
                 return next_response
 
             self.messages.append(tool_result.to_message())
+
+            self._enforce_message_limit()
 
         raise RuntimeError("Agent reached the maximum number of iterations.")

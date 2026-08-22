@@ -1192,3 +1192,60 @@ def test_agent_load_session_restores_messages(tmp_path):
         Message(role="system", content="You are a helpful assistant."),
         Message(role="user", content="Hi"),
     ]
+
+
+def test_agent_enforces_max_messages_keeps_system_and_recent():
+    fake_llm = Mock()
+
+    agent = Agent(
+        llm=fake_llm,
+        system_prompt="You are a helpful assistant.",
+        max_messages=3,
+    )
+
+    agent.messages.append(Message(role="user", content="one"))
+    agent.messages.append(Message(role="assistant", content="two"))
+    agent.messages.append(Message(role="user", content="three"))
+    agent.messages.append(Message(role="assistant", content="four"))
+
+    agent._enforce_message_limit()
+
+    assert len(agent.messages) == 3
+    assert agent.messages[0] == Message(
+        role="system",
+        content="You are a helpful assistant.",
+    )
+    assert agent.messages[1] == Message(role="user", content="three")
+    assert agent.messages[2] == Message(role="assistant", content="four")
+
+
+def test_agent_enforces_max_messages_without_system_prompt():
+    fake_llm = Mock()
+
+    agent = Agent(
+        llm=fake_llm,
+        max_messages=2,
+    )
+
+    agent.messages.append(Message(role="user", content="one"))
+    agent.messages.append(Message(role="assistant", content="two"))
+    agent.messages.append(Message(role="user", content="three"))
+
+    agent._enforce_message_limit()
+
+    assert len(agent.messages) == 2
+    assert agent.messages[0] == Message(role="assistant", content="two")
+    assert agent.messages[1] == Message(role="user", content="three")
+
+
+def test_agent_max_messages_none_does_not_trim():
+    fake_llm = Mock()
+
+    agent = Agent(llm=fake_llm)
+
+    for i in range(20):
+        agent.messages.append(Message(role="user", content=str(i)))
+
+    agent._enforce_message_limit()
+
+    assert len(agent.messages) == 20
