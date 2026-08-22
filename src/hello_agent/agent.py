@@ -181,7 +181,9 @@ class Agent:
 
         for name, tool in self.tools.items():
             signature = inspect.signature(tool)
-            type_hints = get_type_hints(tool)
+            type_hints = get_type_hints(
+                tool if inspect.isroutine(tool) else tool.__call__
+            )
 
             properties = {}
             required = []
