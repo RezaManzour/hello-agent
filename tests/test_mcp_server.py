@@ -25,3 +25,34 @@ def test_mcp_server_add_tool_returns_correct_result():
     result = asyncio.run(run())
 
     assert result.structured_content == {"result": 7}
+
+
+def test_mcp_client_calls_add_tool_through_protocol():
+    from mcp import Client
+
+    server = create_server()
+
+    async def run():
+        async with Client(server) as client:
+            result = await client.call_tool("add", {"a": 10, "b": 5})
+            return result
+
+    result = asyncio.run(run())
+
+    assert result.structured_content == {"result": 15}
+
+
+def test_mcp_client_lists_tools_through_protocol():
+    from mcp import Client
+
+    server = create_server()
+
+    async def run():
+        async with Client(server) as client:
+            tools = await client.list_tools()
+            return tools
+
+    result = asyncio.run(run())
+    tool_names = [tool.name for tool in result.tools]
+
+    assert "add" in tool_names
