@@ -56,3 +56,15 @@ def test_mcp_client_lists_tools_through_protocol():
     tool_names = [tool.name for tool in result.tools]
 
     assert "add" in tool_names
+
+
+def test_mcp_tool_bridge_calls_server_synchronously():
+    from hello_agent.mcp_bridge import MCPToolBridge
+
+    server = create_server()
+
+    bridge = MCPToolBridge(server=server, tool_name="add")
+
+    result = bridge(a=3, b=4)
+
+    assert result == {"result": 7}
