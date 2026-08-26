@@ -25,6 +25,7 @@ class Agent:
         max_iterations: int = 10,
         max_messages: int | None = None,
         guardrails: list[Callable[[str], bool]] | None = None,
+        tool_guardrails: list[Callable[[str], bool]] | None = None,
     ):
         if max_iterations < 1:
             raise ValueError("max_iterations must be at least 1")
@@ -35,6 +36,7 @@ class Agent:
         self.max_iterations = max_iterations
         self.max_messages = max_messages
         self.guardrails = guardrails or []
+        self.tool_guardrails = tool_guardrails or []
         self.messages: list[Message] = []
 
         if self.system_prompt is not None:
@@ -279,6 +281,18 @@ class Agent:
         return tool(**tool_call.arguments)
 
     def _run_tool(self, tool_call: ToolCall) -> ToolResult:
+        for guardrail in self.tool_guardrails:
+            for value in tool_call.arguments.values():
+                if isinstance(value, str) and guardrail(value):
+                    return ToolResult(
+                        tool=tool_call.tool,
+                        content=(
+                            f"Tool error: argument blocked by guardrail "
+                            f"'{guardrail.__name__}'"
+                        ),
+                        is_error=True,
+                    )
+
         try:
             tool_result = self._execute_tool(tool_call)
             return ToolResult(

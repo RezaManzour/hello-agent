@@ -88,3 +88,73 @@ def test_agent_without_guardrails_param_still_works():
     result = agent.run("What is the capital of France?")
 
     assert isinstance(result, LLMResponse)
+
+
+def test_detects_path_traversal():
+    from hello_agent.guardrails import detect_path_traversal
+
+    assert detect_path_traversal("../../etc/passwd") is True
+
+
+def test_normal_path_is_not_flagged():
+    from hello_agent.guardrails import detect_path_traversal
+
+    assert detect_path_traversal("documents/report.txt") is False
+
+
+def test_agent_blocks_tool_call_with_path_traversal_argument():
+    from unittest.mock import Mock
+
+    from hello_agent.agent import Agent
+    from hello_agent.guardrails import detect_path_traversal
+    from hello_agent.types import ToolCall
+
+    def read_file(path: str) -> str:
+        return f"contents of {path}"
+
+    fake_llm = Mock()
+
+    agent = Agent(
+        llm=fake_llm,
+        tools={"read_file": read_file},
+        tool_guardrails=[detect_path_traversal],
+    )
+
+    tool_call = ToolCall(
+        tool="read_file",
+        arguments={"path": "../../etc/passwd"},
+    )
+
+    result = agent._run_tool(tool_call)
+
+    assert result.is_error is True
+    assert "guardrail" in result.content.lower()
+
+
+def test_agent_allows_tool_call_with_normal_argument():
+    from unittest.mock import Mock
+
+    from hello_agent.agent import Agent
+    from hello_agent.guardrails import detect_path_traversal
+    from hello_agent.types import ToolCall
+
+    def read_file(path: str) -> str:
+        return f"contents of {path}"
+
+    fake_llm = Mock()
+
+    agent = Agent(
+        llm=fake_llm,
+        tools={"read_file": read_file},
+        tool_guardrails=[detect_path_traversal],
+    )
+
+    tool_call = ToolCall(
+        tool="read_file",
+        arguments={"path": "documents/report.txt"},
+    )
+
+    result = agent._run_tool(tool_call)
+
+    assert result.is_error is False
+    assert result.content == "contents of documents/report.txt"

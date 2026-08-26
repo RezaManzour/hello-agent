@@ -14,3 +14,7 @@ _COMPILED_PATTERNS = [
 
 def detect_prompt_injection(text: str) -> bool:
     return any(pattern.search(text) for pattern in _COMPILED_PATTERNS)
+
+
+def detect_path_traversal(value: str) -> bool:
+    return ".." in value
