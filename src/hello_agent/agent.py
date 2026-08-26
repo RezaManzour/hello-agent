@@ -7,6 +7,7 @@ from typing import TypeVar, get_args, get_origin, get_type_hints
 
 from pydantic import BaseModel
 
+from hello_agent.exceptions import GuardrailViolationError
 from hello_agent.llm import LLMClient
 from hello_agent.types import LLMResponse, Message, ToolCall, ToolResult
 
@@ -23,6 +24,7 @@ class Agent:
         tools: dict[str, Tool] | None = None,
         max_iterations: int = 10,
         max_messages: int | None = None,
+        guardrails: list[Callable[[str], bool]] | None = None,
     ):
         if max_iterations < 1:
             raise ValueError("max_iterations must be at least 1")
@@ -32,6 +34,7 @@ class Agent:
         self.tools = tools or {}
         self.max_iterations = max_iterations
         self.max_messages = max_messages
+        self.guardrails = guardrails or []
         self.messages: list[Message] = []
 
         if self.system_prompt is not None:
@@ -341,6 +344,12 @@ class Agent:
         prompt: str,
         response_model: type[T] | None = None,
     ) -> LLMResponse | T:
+        for guardrail in self.guardrails:
+            if guardrail(prompt):
+                raise GuardrailViolationError(
+                    f"Prompt violated guardrail: {guardrail.__name__}"
+                )
+
         self.messages.append(
             Message(
                 role="user",

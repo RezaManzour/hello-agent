@@ -12,3 +12,7 @@ class LLMRateLimitError(LLMError):
 
 class LLMProviderError(LLMError):
     """Raised when the LLM provider returns an unexpected error."""
+
+
+class GuardrailViolationError(Exception):
+    """Raised when a prompt violates a registered Agent guardrail."""
