@@ -26,6 +26,7 @@ class Agent:
         max_messages: int | None = None,
         guardrails: list[Callable[[str], bool]] | None = None,
         tool_guardrails: list[Callable[[str], bool]] | None = None,
+        on_event: Callable[[str, dict], None] | None = None,
     ):
         if max_iterations < 1:
             raise ValueError("max_iterations must be at least 1")
@@ -37,6 +38,7 @@ class Agent:
         self.max_messages = max_messages
         self.guardrails = guardrails or []
         self.tool_guardrails = tool_guardrails or []
+        self.on_event = on_event
         self.messages: list[Message] = []
 
         if self.system_prompt is not None:
@@ -280,6 +282,10 @@ class Agent:
 
         return tool(**tool_call.arguments)
 
+    def _emit(self, name: str, data: dict) -> None:
+        if self.on_event is not None:
+            self.on_event(name, data)
+
     def _run_tool(self, tool_call: ToolCall) -> ToolResult:
         for guardrail in self.tool_guardrails:
             for value in tool_call.arguments.values():
@@ -293,20 +299,36 @@ class Agent:
                         is_error=True,
                     )
 
+        self._emit(
+            "tool_call",
+            {"tool": tool_call.tool, "arguments": tool_call.arguments},
+        )
+
         try:
             tool_result = self._execute_tool(tool_call)
-            return ToolResult(
+            result = ToolResult(
                 tool=tool_call.tool,
                 content=str(tool_result),
                 is_error=False,
             )
         except Exception as exc:  # noqa: BLE001 — intentional: must catch any tool failure
-            return ToolResult(
+            result = ToolResult(
                 tool=tool_call.tool,
                 content=f"Tool error: {exc}",
                 is_error=True,
                 error=exc,
             )
+
+        self._emit(
+            "tool_result",
+            {
+                "tool": result.tool,
+                "is_error": result.is_error,
+                "content": result.content,
+            },
+        )
+
+        return result
 
     def save_session(self, path: str | Path) -> None:
         data = [
@@ -364,6 +386,8 @@ class Agent:
                     f"Prompt violated guardrail: {guardrail.__name__}"
                 )
 
+        self._emit("run_start", {"prompt": prompt})
+
         self.messages.append(
             Message(
                 role="user",
@@ -420,6 +444,17 @@ class Agent:
                 )
 
                 self._enforce_message_limit()
+
+                self._emit(
+                    "run_end",
+                    {
+                        "content": (
+                            response.content
+                            if isinstance(response, LLMResponse)
+                            else None
+                        )
+                    },
+                )
 
                 return response
 
