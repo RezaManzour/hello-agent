@@ -500,10 +500,16 @@ class Agent:
 
                 self._enforce_message_limit()
 
+                self._emit(
+                    "run_end",
+                    {"content": next_response.content},
+                )
+
                 return next_response
 
             self.messages.append(tool_result.to_message())
 
             self._enforce_message_limit()
 
+        self._emit("run_error", {"reason": "max_iterations_exhausted"})
         raise RuntimeError("Agent reached the maximum number of iterations.")
