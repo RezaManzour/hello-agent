@@ -30,4 +30,6 @@ jobs:
         run: uv run ruff format --check .
 
       - name: Run tests
+        env:
+          HF_TOKEN: dummy-token-for-ci
         run: uv run pytest -q
