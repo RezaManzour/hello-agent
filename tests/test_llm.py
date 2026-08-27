@@ -2,7 +2,6 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import httpx
-
 from huggingface_hub.errors import HfHubHTTPError
 
 from hello_agent.config import LLMConfig
@@ -38,9 +37,7 @@ def test_llm_client_returns_response():
         choices=[
             SimpleNamespace(
                 finish_reason="stop",
-                message=SimpleNamespace(
-                    content="Hello from the mock model."
-                ),
+                message=SimpleNamespace(content="Hello from the mock model."),
             )
         ],
         usage=SimpleNamespace(
@@ -95,9 +92,7 @@ def test_llm_client_handles_authentication_error():
         except LLMAuthenticationError as exc:
             assert "authentication" in str(exc).lower()
         else:
-            raise AssertionError(
-                "LLMAuthenticationError was not raised"
-            )
+            raise AssertionError("LLMAuthenticationError was not raised")
 
 
 def test_llm_client_handles_rate_limit_error():
@@ -122,9 +117,7 @@ def test_llm_client_handles_rate_limit_error():
         except LLMRateLimitError as exc:
             assert "rate limit" in str(exc).lower()
         else:
-            raise AssertionError(
-                "LLMRateLimitError was not raised"
-            )
+            raise AssertionError("LLMRateLimitError was not raised")
 
 
 def test_llm_client_handles_provider_error():
@@ -138,21 +131,12 @@ def test_llm_client_handles_provider_error():
         client = LLMClient(LLMConfig())
 
         try:
-            client.chat(
-                [
-                    Message(
-                        role="user",
-                        content="Hello"
-                    )
-                ]
-            )
+            client.chat([Message(role="user", content="Hello")])
         except LLMProviderError as exc:
             assert "provider error" in str(exc).lower()
             assert "500" in str(exc)
         else:
-            raise AssertionError(
-                "LLMProviderError was not raised"
-            )
+            raise AssertionError("LLMProviderError was not raised")
 
 
 def test_llm_client_passes_generation_parameters():
@@ -161,9 +145,7 @@ def test_llm_client_passes_generation_parameters():
         choices=[
             SimpleNamespace(
                 finish_reason="stop",
-                message=SimpleNamespace(
-                    content="Test response."
-                ),
+                message=SimpleNamespace(content="Test response."),
             )
         ],
         usage=SimpleNamespace(
@@ -283,16 +265,16 @@ def test_llm_client_sends_structured_output_schema():
 
     assert response_format["type"] == "json_schema"
     assert response_format["json_schema"]["name"] == "AgentDefinition"
-    assert response_format["json_schema"]["schema"] == AgentDefinition.model_json_schema()
+    assert (
+        response_format["json_schema"]["schema"] == AgentDefinition.model_json_schema()
+    )
 
 
 def test_llm_client_handles_invalid_structured_output():
     fake_response = SimpleNamespace(
         choices=[
             SimpleNamespace(
-                message=SimpleNamespace(
-                    content='{"definition": "Missing confidence"}'
-                ),
+                message=SimpleNamespace(content='{"definition": "Missing confidence"}'),
                 finish_reason="stop",
             )
         ],
@@ -324,25 +306,17 @@ def test_llm_client_handles_invalid_structured_output():
                 response_model=AgentDefinition,
             )
             raise AssertionError("Expected LLMProviderError")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — intentional: test checks any exception's message
             assert "structured" in str(exc).lower()
 
 
 def test_llm_client_streams_text():
     fake_chunks = [
         SimpleNamespace(
-            choices=[
-                SimpleNamespace(
-                    delta=SimpleNamespace(content="Hello ")
-                )
-            ]
+            choices=[SimpleNamespace(delta=SimpleNamespace(content="Hello "))]
         ),
         SimpleNamespace(
-            choices=[
-                SimpleNamespace(
-                    delta=SimpleNamespace(content="world!")
-                )
-            ]
+            choices=[SimpleNamespace(delta=SimpleNamespace(content="world!"))]
         ),
     ]
 
@@ -373,19 +347,9 @@ def test_llm_client_stream_ignores_empty_chunks():
     fake_chunks = [
         SimpleNamespace(choices=[]),
         SimpleNamespace(
-            choices=[
-                SimpleNamespace(
-                    delta=SimpleNamespace(content="Hello")
-                )
-            ]
+            choices=[SimpleNamespace(delta=SimpleNamespace(content="Hello"))]
         ),
-        SimpleNamespace(
-            choices=[
-                SimpleNamespace(
-                    delta=SimpleNamespace(content=None)
-                )
-            ]
-        ),
+        SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content=None))]),
     ]
 
     fake_client = Mock()
@@ -414,11 +378,7 @@ def test_llm_client_stream_ignores_empty_chunks():
 def test_llm_client_stream_passes_parameters():
     fake_chunks = [
         SimpleNamespace(
-            choices=[
-                SimpleNamespace(
-                    delta=SimpleNamespace(content="Test")
-                )
-            ]
+            choices=[SimpleNamespace(delta=SimpleNamespace(content="Test"))]
         )
     ]
 
@@ -451,15 +411,12 @@ def test_llm_client_stream_passes_parameters():
     assert call_kwargs["stream"] is True
 
 
-
 def test_llm_client_retries_rate_limit():
     fake_response = SimpleNamespace(
         choices=[
             SimpleNamespace(
                 finish_reason="stop",
-                message=SimpleNamespace(
-                    content="Success after retry."
-                ),
+                message=SimpleNamespace(content="Success after retry."),
             )
         ],
         model="test-model",
@@ -523,6 +480,7 @@ def test_llm_client_does_not_retry_authentication_error():
             pass
 
     assert fake_client.chat.completions.create.call_count == 1
+
 
 def test_llm_client_supports_tools():
     fake_response = SimpleNamespace(

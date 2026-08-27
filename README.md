@@ -81,9 +81,11 @@ from hello_agent.agent import Agent
 from hello_agent.llm import LLMClient
 from hello_agent.config import LLMConfig
 
+
 def get_weather(city: str) -> str:
     """Get the current weather for a city."""
     return f"It's sunny in {city}."
+
 
 agent = Agent(
     llm=LLMClient(LLMConfig()),

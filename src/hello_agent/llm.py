@@ -15,7 +15,6 @@ from hello_agent.exceptions import (
 )
 from hello_agent.types import LLMResponse, Message, ToolCall
 
-
 T = TypeVar("T", bound=BaseModel)
 
 load_dotenv()
@@ -116,9 +115,7 @@ class LLMClient:
             try:
                 arguments = json.loads(function.arguments)
             except json.JSONDecodeError as exc:
-                raise LLMProviderError(
-                    "Failed to parse tool call arguments."
-                ) from exc
+                raise LLMProviderError("Failed to parse tool call arguments.") from exc
 
             return ToolCall(
                 tool=function.name,
@@ -127,9 +124,7 @@ class LLMClient:
 
         if response_model is not None:
             try:
-                return response_model.model_validate_json(
-                    choice.message.content
-                )
+                return response_model.model_validate_json(choice.message.content)
             except Exception as exc:
                 raise LLMProviderError(
                     "Failed to parse structured LLM response."
@@ -178,9 +173,7 @@ class LLMClient:
                 ) from exc
 
             if status_code == 429:
-                raise LLMRateLimitError(
-                    "Hugging Face rate limit exceeded."
-                ) from exc
+                raise LLMRateLimitError("Hugging Face rate limit exceeded.") from exc
 
             raise LLMProviderError(
                 f"Hugging Face provider error: HTTP {status_code}"
