@@ -33,3 +33,6 @@ jobs:
         env:
           HF_TOKEN: dummy-token-for-ci
         run: uv run pytest -q
+
+      - name: Build Docker image
+        run: docker build -t hello-agent:ci .
