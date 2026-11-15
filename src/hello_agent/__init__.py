@@ -1,2 +1,1 @@
-def main() -> None:
-    print("Hello from hello-agent!")
+"""hello-agent: a from-scratch, test-driven LLM agent framework."""
