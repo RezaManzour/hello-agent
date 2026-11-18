@@ -14,13 +14,13 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
 ]
 dependencies = [
-    "fastapi>=0.141.1",
+    "fastapi>=0.163.1",
     "httpx>=0.28.1",
-    "huggingface-hub>=1.27.0",
-    "mcp>=2.0.0",
-    "numpy>=2.5.2",
-    "pydantic>=2.13.4",
-    "python-dotenv>=1.2.2",
+    "huggingface-hub>=2.4.0",
+    "mcp>=2.3.0",
+    "numpy>=2.5.4",
+    "pydantic>=2.14.3",
+    "python-dotenv>=1.2.4",
     "rich>=15.0.0",
 ]
 
@@ -31,11 +31,11 @@ hello-agent = "hello_agent.main:main"
 Repository = "https://github.com/RezaManzour/hello-agent"
 
 [build-system]
-requires = ["uv_build>=0.12.3,<0.13.0"]
+requires = ["uv_build>=0.13.8,<0.14.0"]
 build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
-    "pytest>=9.1.1",
-    "ruff>=0.16.2",
+    "pytest>=9.2.0",
+    "ruff>=0.17.5",
 ]
