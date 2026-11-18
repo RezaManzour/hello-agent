@@ -1,9 +1,18 @@
 [project]
 name = "hello-agent"
 version = "0.1.0"
-description = "Add your description here"
+description = "A from-scratch, test-driven LLM agent framework: tool calling, memory, RAG, MCP, multi-agent delegation, evaluation and guardrails"
 readme = "README.md"
 requires-python = ">=3.12"
+license = { file = "LICENSE" }
+authors = [{ name = "Reza Manzour" }]
+keywords = ["llm", "agents", "tool-calling", "rag", "mcp", "tdd"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: MIT License",
+]
 dependencies = [
     "fastapi>=0.141.1",
     "httpx>=0.28.1",
@@ -16,7 +25,10 @@ dependencies = [
 ]
 
 [project.scripts]
-hello-agent = "hello_agent:main"
+hello-agent = "hello_agent.main:main"
+
+[project.urls]
+Repository = "https://github.com/RezaManzour/hello-agent"
 
 [build-system]
 requires = ["uv_build>=0.12.3,<0.13.0"]
